@@ -1,4 +1,4 @@
-# Frontend QA Checker
+# Frontend QA Checker (DevCheck)
 
 Repository: [github.com/choijinwon/DevCheck](https://github.com/choijinwon/DevCheck)
 
