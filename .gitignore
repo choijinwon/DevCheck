@@ -24,13 +24,22 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
 
-# local env files
-.env*.local
+# Environment variables — NEVER commit real secrets.
+# DO commit: .env.example (template only)
+.env
+.env.*
+!.env.example
 
 # vercel
 .vercel
 
 # typescript
 *.tsbuildinfo
-next-env.d.ts
+
+# Next.js type references (safe to commit; helps fresh clones)
+# next-env.d.ts — tracked
+
+# IDE (JetBrains)
+.idea/

@@ -1,17 +1,26 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Frontend QA Checker
+
+Repository: [github.com/choijinwon/DevCheck](https://github.com/choijinwon/DevCheck)
+
+Next.js app that runs Puppeteer + axe-core accessibility checks on a URL.
+
+## Environment
+
+Copy the example file and fill in values only on your machine (these files stay out of Git):
+
+```bash
+cp .env.example .env
+```
+
+`SUPABASE_*` is optional; without it, results use the browser session only.
 
 ## Getting Started
 
-First, run the development server:
+Install dependencies and run the development server:
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
