@@ -14,12 +14,39 @@ cp .env.example .env
 
 `SUPABASE_*` is optional; without it, results use the browser session only.
 
+| Variable | Purpose |
+|----------|---------|
+| `POST_LOAD_DELAY_MS` | Optional `0`–`2000` ms pause after load before axe (SPAs). Uses part of the 10s budget. |
+| `RATE_LIMIT_WINDOW_MS` | Rate-limit window for analyze API (default `60000`). |
+| `RATE_LIMIT_MAX` | Max analyze requests per IP per window (default `20`). |
+| `PUPPETEER_EXECUTABLE_PATH` | Optional path to Chrome/Chromium if you don’t use Puppeteer’s downloaded browser. |
+
+## Operations
+
+- **QA:** Run `npm run test` (Vitest) and see [docs/QA.md](docs/QA.md) for a manual smoke checklist.
+- **CI scan:** With the app running, `SCAN_URL=https://example.com npm run scan:ci` (see [docs/QA.md](docs/QA.md) for env vars).
+- **Scan history:** Recent analyses are listed at `/history` (stored in the browser only, max 20).
+- **Health:** `GET /api/health` — no browser; suitable for uptime checks.
+- **Rate limits:** Applied per client IP (`x-forwarded-for` / `x-real-ip`). In-memory only; use a gateway or Redis for multi-instance production.
+- **Deployment:** Full Puppeteer needs a Node runtime with Chrome/Chromium. Serverless hosts often need `puppeteer-core` + a bundled Chromium or a dedicated worker.
+
 ## Getting Started
 
 Install dependencies and run the development server:
 
 ```bash
 npm install
+```
+
+Puppeteer v24+ downloads Chrome separately. `npm install` runs `postinstall` to fetch it into `~/.cache/puppeteer`. If analysis fails with “Could not find Chrome”, run:
+
+```bash
+npm run install-browser
+```
+
+Then:
+
+```bash
 npm run dev
 ```
 

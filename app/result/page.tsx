@@ -1,16 +1,17 @@
+import { PageShell } from "@/app/components/page-shell";
 import { Suspense } from "react";
 import { ResultView } from "./result-view";
 
 export default function ResultPage() {
   return (
-    <main className="mx-auto min-h-screen max-w-2xl px-4 py-16">
-      <Suspense
-        fallback={
-          <p className="text-sm text-zinc-600">Loading results…</p>
-        }
-      >
-        <ResultView />
-      </Suspense>
-    </main>
+    <Suspense
+      fallback={
+        <PageShell wide>
+          <p className="text-sm text-slate-600">결과를 불러오는 중…</p>
+        </PageShell>
+      }
+    >
+      <ResultView />
+    </Suspense>
   );
 }

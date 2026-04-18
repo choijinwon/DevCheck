@@ -3,6 +3,8 @@ import {
   isAnalyzerError,
   type AnalyzerErrorCode,
 } from "@/lib/analyzer";
+import { normalizePreset } from "@/lib/axe-presets";
+import { checkRateLimit, clientKeyFromRequest } from "@/lib/rate-limit";
 import { createServiceClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
@@ -52,8 +54,48 @@ export async function POST(request: Request) {
     );
   }
 
+  const rawPreset =
+    typeof body === "object" &&
+    body !== null &&
+    "preset" in body
+      ? (body as { preset: unknown }).preset
+      : undefined;
+  if (
+    rawPreset !== undefined &&
+    rawPreset !== "default" &&
+    rawPreset !== "extended"
+  ) {
+    return NextResponse.json(
+      {
+        error: {
+          code: "BAD_REQUEST",
+          message: 'preset은 "default" 또는 "extended"만 허용됩니다.',
+        },
+      },
+      { status: 400 }
+    );
+  }
+
+  const rl = checkRateLimit(clientKeyFromRequest(request));
+  if (!rl.ok) {
+    return NextResponse.json(
+      {
+        error: {
+          code: "RATE_LIMITED",
+          message: `Too many requests. Try again in ${rl.retryAfterSec} seconds.`,
+        },
+      },
+      {
+        status: 429,
+        headers: { "Retry-After": String(rl.retryAfterSec) },
+      }
+    );
+  }
+
   try {
-    const { issues, cached, canonicalUrl } = await analyzePage(url);
+    const preset = normalizePreset(rawPreset);
+    const { issues, cached, canonicalUrl, preset: usedPreset } =
+      await analyzePage(url, { preset });
 
     const supabase = createServiceClient();
     if (supabase) {
@@ -68,6 +110,7 @@ export async function POST(request: Request) {
           scanId: data.id,
           issues,
           cached,
+          preset: usedPreset,
         });
       }
       if (error) {
@@ -75,7 +118,7 @@ export async function POST(request: Request) {
       }
     }
 
-    return NextResponse.json({ issues, cached });
+    return NextResponse.json({ issues, cached, preset: usedPreset });
   } catch (e: unknown) {
     if (isAnalyzerError(e)) {
       if (e.cause) {

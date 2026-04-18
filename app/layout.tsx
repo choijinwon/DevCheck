@@ -24,9 +24,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    // 확장 프로그램 등이 <html>/<body>에 속성을 넣을 때 hydration 경고를 줄이기 위함
+    <html lang="ko" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}
+        suppressHydrationWarning
       >
         {children}
       </body>

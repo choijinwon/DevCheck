@@ -32,6 +32,11 @@ export function canonicalizeUrl(raw: string): string {
 
 const cache = new Map<string, { issues: Issue[]; expiresAt: number }>();
 
+/** 테스트에서 캐시를 비울 때만 사용합니다. */
+export function clearAnalysisCache(): void {
+  cache.clear();
+}
+
 export function getCachedIssues(canonicalUrl: string): Issue[] | undefined {
   const entry = cache.get(canonicalUrl);
   if (!entry) return undefined;

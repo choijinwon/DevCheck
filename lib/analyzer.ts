@@ -3,24 +3,27 @@ import type * as Axe from "axe-core";
 import type { HTTPRequest } from "puppeteer";
 import puppeteer, { type Browser } from "puppeteer";
 import {
+  buildCacheKey,
+  type AnalysisPreset,
+  rulesForPreset,
+} from "@/lib/axe-presets";
+import {
   canonicalizeUrl,
   getCachedIssues,
   setCachedIssues,
 } from "@/lib/analysis-cache";
 import type { Issue } from "@/lib/types";
 
-/** Rules aligned with MVP: images, labels, headings. */
-const FOCUS_RULES = [
-  "image-alt",
-  "input-image-alt",
-  "label",
-  "select-name",
-  "button-name",
-  "heading-order",
-  "page-has-heading-one",
-] as const;
-
 const TOTAL_BUDGET_MS = 10_000;
+
+/** Optional wait after DOMContentLoaded for client-rendered SPAs (ms, max 2000). */
+function postLoadDelayMs(): number {
+  const raw = process.env.POST_LOAD_DELAY_MS;
+  if (raw === undefined || raw === "") return 0;
+  const n = parseInt(raw, 10);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return Math.min(2000, n);
+}
 
 export type AnalyzerErrorCode =
   | "INVALID_URL"
@@ -59,25 +62,32 @@ function withAnalyzeLock<T>(fn: () => Promise<T>): Promise<T> {
   return run;
 }
 
+function launchOptions(): Parameters<typeof puppeteer.launch>[0] {
+  const explicit = process.env.PUPPETEER_EXECUTABLE_PATH?.trim();
+  return {
+    headless: true,
+    ...(explicit ? { executablePath: explicit } : {}),
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+    ],
+  };
+}
+
 async function getBrowser(): Promise<Browser> {
   if (!browserPromise) {
-    browserPromise = puppeteer
-      .launch({
-        headless: true,
-        args: [
-          "--no-sandbox",
-          "--disable-setuid-sandbox",
-          "--disable-dev-shm-usage",
-        ],
-      })
-      .catch((e: unknown) => {
-        browserPromise = null;
-        throw new AnalyzerError(
-          "BROWSER_UNAVAILABLE",
-          "Could not start the browser for analysis. Try again in a moment.",
-          e
-        );
-      });
+    browserPromise = puppeteer.launch(launchOptions()).catch((e: unknown) => {
+      browserPromise = null;
+      const hint =
+        "Install the bundled Chrome: npm run install-browser (or: npx puppeteer browsers install chrome). " +
+        "Or set PUPPETEER_EXECUTABLE_PATH to your Chrome/Chromium binary.";
+      throw new AnalyzerError(
+        "BROWSER_UNAVAILABLE",
+        `Could not start the browser for analysis. ${hint}`,
+        e
+      );
+    });
   }
   return browserPromise;
 }
@@ -141,7 +151,8 @@ function wrapNavigationError(e: unknown): AnalyzerError {
 }
 
 async function runAnalysisLocked(
-  canonical: string
+  canonical: string,
+  rules: string[]
 ): Promise<{ issues: Issue[]; cached: boolean }> {
   const browser = await getBrowser();
   const page = await browser.newPage();
@@ -159,25 +170,36 @@ async function runAnalysisLocked(
     const issues = await Promise.race([
       (async (): Promise<Issue[]> => {
         try {
+          // axe-core's AxePuppeteer requires document.readyState === "complete"
+          // (see assertFrameReady in @axe-core/puppeteer). "domcontentloaded" is too early.
           await page.goto(canonical, {
-            waitUntil: "domcontentloaded",
+            waitUntil: "load",
             timeout: TOTAL_BUDGET_MS,
           });
         } catch (e: unknown) {
           throw wrapNavigationError(e);
         }
 
+        const spaDelay = postLoadDelayMs();
+        if (spaDelay > 0) {
+          await new Promise<void>((resolve) => {
+            setTimeout(resolve, spaDelay);
+          });
+        }
+
         let axeResults;
         try {
           axeResults = await new AxePuppeteer(page)
-            .withRules([...FOCUS_RULES])
+            .withRules(rules)
             .analyze();
         } catch (e: unknown) {
-          throw new AnalyzerError(
-            "ANALYSIS_FAILED",
-            "Accessibility analysis failed while scanning the page.",
-            e
-          );
+          const msg = e instanceof Error ? e.message : String(e);
+          const detail =
+            msg.includes("Page/Frame is not ready") ||
+            msg.includes("not ready")
+              ? "페이지(또는 내부 프레임)가 아직 준비되지 않았습니다. 잠시 후 다시 시도하거나 POST_LOAD_DELAY_MS를 올려 보세요."
+              : "페이지를 스캔하는 동안 접근성 분석에 실패했습니다.";
+          throw new AnalyzerError("ANALYSIS_FAILED", detail, e);
         }
 
         return mapViolationsToIssues(axeResults);
@@ -194,7 +216,6 @@ async function runAnalysisLocked(
       }),
     ]);
 
-    setCachedIssues(canonical, issues);
     return { issues, cached: false };
   } catch (e: unknown) {
     if (e instanceof AnalyzerError) throw e;
@@ -211,13 +232,24 @@ async function runAnalysisLocked(
   }
 }
 
+export type AnalyzePageOptions = {
+  preset?: AnalysisPreset;
+};
+
 /**
  * Loads a URL with Puppeteer, runs axe-core on focused rules, returns structured issues.
- * Reuses one browser per process; caches by canonical URL with TTL.
+ * Reuses one browser per process; caches by canonical URL + preset with TTL.
  */
 export async function analyzePage(
-  url: string
-): Promise<{ issues: Issue[]; cached: boolean; canonicalUrl: string }> {
+  url: string,
+  options: AnalyzePageOptions = {}
+): Promise<{
+  issues: Issue[];
+  cached: boolean;
+  canonicalUrl: string;
+  preset: AnalysisPreset;
+}> {
+  const preset = options.preset ?? "default";
   let canonical: string;
   try {
     canonical = canonicalizeUrl(url);
@@ -228,19 +260,33 @@ export async function analyzePage(
     );
   }
 
-  const hit = getCachedIssues(canonical);
+  const cacheKey = buildCacheKey(canonical, preset);
+  const rules = rulesForPreset(preset);
+
+  const hit = getCachedIssues(cacheKey);
   if (hit !== undefined) {
-    return { issues: hit, cached: true, canonicalUrl: canonical };
+    return {
+      issues: hit,
+      cached: true,
+      canonicalUrl: canonical,
+      preset,
+    };
   }
 
   return withAnalyzeLock(async () => {
-    const again = getCachedIssues(canonical);
+    const again = getCachedIssues(cacheKey);
     if (again !== undefined) {
-      return { issues: again, cached: true, canonicalUrl: canonical };
+      return {
+        issues: again,
+        cached: true,
+        canonicalUrl: canonical,
+        preset,
+      };
     }
     try {
-      const result = await runAnalysisLocked(canonical);
-      return { ...result, canonicalUrl: canonical };
+      const result = await runAnalysisLocked(canonical, rules);
+      setCachedIssues(cacheKey, result.issues);
+      return { ...result, canonicalUrl: canonical, preset };
     } catch (e: unknown) {
       if (e instanceof AnalyzerError) throw e;
       throw new AnalyzerError(
@@ -251,3 +297,5 @@ export async function analyzePage(
     }
   });
 }
+
+export type { AnalysisPreset } from "@/lib/axe-presets";
