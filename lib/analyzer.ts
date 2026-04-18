@@ -1,7 +1,7 @@
 import { AxePuppeteer } from "@axe-core/puppeteer";
 import type * as Axe from "axe-core";
-import type { HTTPRequest } from "puppeteer";
-import puppeteer, { type Browser } from "puppeteer";
+import type { Browser } from "puppeteer-core";
+import type { HTTPRequest } from "puppeteer-core";
 import {
   buildCacheKey,
   type AnalysisPreset,
@@ -62,7 +62,11 @@ function withAnalyzeLock<T>(fn: () => Promise<T>): Promise<T> {
   return run;
 }
 
-function launchOptions(): Parameters<typeof puppeteer.launch>[0] {
+function isNetlifyRuntime(): boolean {
+  return process.env.NETLIFY === "true";
+}
+
+function launchOptionsLocal() {
   const explicit = process.env.PUPPETEER_EXECUTABLE_PATH?.trim();
   return {
     headless: true,
@@ -75,13 +79,34 @@ function launchOptions(): Parameters<typeof puppeteer.launch>[0] {
   };
 }
 
+async function launchBrowser(): Promise<Browser> {
+  if (isNetlifyRuntime()) {
+    const puppeteerCore = await import("puppeteer-core");
+    const chromium = (await import("@sparticuz/chromium")).default;
+    const executablePath = await chromium.executablePath();
+    return puppeteerCore.default.launch({
+      args: [
+        ...chromium.args,
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+      ],
+      executablePath,
+      headless: true,
+    });
+  }
+  const puppeteer = await import("puppeteer");
+  return puppeteer.default.launch(launchOptionsLocal());
+}
+
 async function getBrowser(): Promise<Browser> {
   if (!browserPromise) {
-    browserPromise = puppeteer.launch(launchOptions()).catch((e: unknown) => {
+    browserPromise = launchBrowser().catch((e: unknown) => {
       browserPromise = null;
-      const hint =
-        "Install the bundled Chrome: npm run install-browser (or: npx puppeteer browsers install chrome). " +
-        "Or set PUPPETEER_EXECUTABLE_PATH to your Chrome/Chromium binary.";
+      const hint = isNetlifyRuntime()
+        ? "Netlify에서 Chromium을 띄우지 못했습니다. 함수 메모리·타임아웃(기본 10초)과 빌드 로그를 확인하세요."
+        : "Install the bundled Chrome: npm run install-browser (or: npx puppeteer browsers install chrome). " +
+          "Or set PUPPETEER_EXECUTABLE_PATH to your Chrome/Chromium binary.";
       throw new AnalyzerError(
         "BROWSER_UNAVAILABLE",
         `Could not start the browser for analysis. ${hint}`,

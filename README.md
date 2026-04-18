@@ -30,6 +30,16 @@ cp .env.example .env
 - **Rate limits:** Applied per client IP (`x-forwarded-for` / `x-real-ip`). In-memory only; use a gateway or Redis for multi-instance production.
 - **Deployment:** Full Puppeteer needs a Node runtime with Chrome/Chromium. Serverless hosts often need `puppeteer-core` + a bundled Chromium or a dedicated worker.
 
+## Netlify
+
+This repo includes [`netlify.toml`](netlify.toml) and [`@netlify/plugin-nextjs`](https://docs.netlify.com/frameworks/next-js/overview/). On Netlify, `NETLIFY=true` is set automatically; the analyzer uses [`@sparticuz/chromium`](https://github.com/Sparticuz/chromium) + `puppeteer-core` instead of downloading Chrome in `postinstall`.
+
+1. In the [Netlify dashboard](https://app.netlify.com/), **Add new site** → **Import an existing project** and connect the GitHub repo (`choijinwon/DevCheck`).
+2. Leave **Build command** `npm run build` and let the plugin pick publish settings (no manual `publish` path needed).
+3. Optional: copy env vars from `.env.example` (e.g. Supabase, rate limits) in **Site configuration → Environment variables**.
+
+**Limits:** Analyze uses up to ~10s of work per request; Netlify Functions default to a **10s timeout** (cold start + browser can hit this on free tier). Paid plans can request up to **26s** via [Netlify Support](https://answers.netlify.com/). If scans fail with timeouts, try again (warm instance) or upgrade / ask for a longer limit.
+
 ## Getting Started
 
 Install dependencies and run the development server:

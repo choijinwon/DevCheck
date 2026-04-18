@@ -1,0 +1,14 @@
+# Next.js on Netlify — https://docs.netlify.com/frameworks/next-js/overview/
+[build]
+  command = "npm run build"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# 분석 API는 Puppeteer + Chromium으로 최대 ~10초에 가깝게 걸릴 수 있습니다.
+# 무료 플랜은 함수 타임아웃이 10초라 첫 요청(콜드 스타트)에서 초과할 수 있습니다.
+# Pro 이상에서 26초까지 늘리려면 Netlify 지원에 사이트 ID로 요청하세요.
+# https://docs.netlify.com/functions/overview/#default-timeout

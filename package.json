@@ -12,17 +12,20 @@
     "test:watch": "vitest",
     "scan:ci": "node scripts/ci-scan.mjs",
     "install-browser": "npx puppeteer browsers install chrome",
-    "postinstall": "npx puppeteer browsers install chrome"
+    "postinstall": "node scripts/postinstall-browser.mjs"
   },
   "dependencies": {
     "@axe-core/puppeteer": "^4.11.2",
+    "@sparticuz/chromium": "^131.0.0",
     "@supabase/supabase-js": "^2.103.3",
     "next": "14.2.35",
     "puppeteer": "^24.41.0",
+    "puppeteer-core": "^24.41.0",
     "react": "^18",
     "react-dom": "^18"
   },
   "devDependencies": {
+    "@netlify/plugin-nextjs": "^5.0.0",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
