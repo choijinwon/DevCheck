@@ -1,6 +1,9 @@
 # Next.js on Netlify — https://docs.netlify.com/frameworks/next-js/overview/
+# publish: Netlify 대시보드에서 "build" 등으로 잘못 잡히면 플러그인이 실패하므로
+# 여기서 .next 로 고정합니다.
 [build]
   command = "npm run build"
+  publish = ".next"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"

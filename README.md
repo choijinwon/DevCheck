@@ -35,8 +35,9 @@ cp .env.example .env
 This repo includes [`netlify.toml`](netlify.toml) and [`@netlify/plugin-nextjs`](https://docs.netlify.com/frameworks/next-js/overview/). On Netlify, `NETLIFY=true` is set automatically; the analyzer uses [`@sparticuz/chromium`](https://github.com/Sparticuz/chromium) + `puppeteer-core` instead of downloading Chrome in `postinstall`.
 
 1. In the [Netlify dashboard](https://app.netlify.com/), **Add new site** → **Import an existing project** and connect the GitHub repo (`choijinwon/DevCheck`).
-2. Leave **Build command** `npm run build` and let the plugin pick publish settings (no manual `publish` path needed).
-3. Optional: copy env vars from `.env.example` (e.g. Supabase, rate limits) in **Site configuration → Environment variables**.
+2. **Build command:** `npm run build`. **Publish directory:** leave empty or set to `.next` (the repo’s `netlify.toml` sets `publish = ".next"`). If the UI was set to `build` or another folder, clear it so it matches Next.js output.
+3. **Adapter:** `@netlify/plugin-nextjs` is listed in `dependencies` (OpenNext v5, e.g. `^5.15.9`). Avoid relying on an outdated `5.0.x` lockfile.
+4. Optional: copy env vars from `.env.example` (e.g. Supabase, rate limits) in **Site configuration → Environment variables**.
 
 **Limits:** Analyze uses up to ~10s of work per request; Netlify Functions default to a **10s timeout** (cold start + browser can hit this on free tier). Paid plans can request up to **26s** via [Netlify Support](https://answers.netlify.com/). If scans fail with timeouts, try again (warm instance) or upgrade / ask for a longer limit.
 
